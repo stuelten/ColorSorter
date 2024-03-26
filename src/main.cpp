@@ -2,8 +2,13 @@
  *
  */
 #include <Arduino.h>
+#include <ESP32Servo.h>
 
 #define LED_BUILTIN 2
+// simply calls how often loop() was called
+unsigned long loopCount = 0;
+
+// ------------------------------------------------------------------------
 
 // Color Sensor PINs
 #define COLOR_S2 4
@@ -18,7 +23,7 @@
 
 // Color sensors gives us red, green, blue and intensity
 struct RGBI {
-    int red, green, blue, intensity;
+    int red = 0, green = 0, blue = 0, intensity = 0;
 };
 
 // We use two sensors
@@ -32,14 +37,21 @@ struct ColorMeasurements {
 // Global array to hold RGBI values for all sensors
 static RGBI rgbArray[COLOR_SENSORS];
 
-// simply calls how often loop() was called
-unsigned long loopCount = 0;
+// ------------------------------------------------------------------------
+
+// Servo PINs
+#define SERVO_SEPERATOR_PIN 27
+#define SERVO_LEVER_PIN 26
+
+// Servo on the top
+Servo servoSeparator;
+Servo servoLever;
 
 // ------------------------------------------------------------------------
 
 // blink build-in LED
 void blink() {
-    const unsigned long BLINK_PHASE = 1000;
+    const unsigned long BLINK_PHASE = 250000;
     // when to update LED
     static unsigned long nextChangeMicros = 0;
     static bool blink = false;
@@ -111,10 +123,9 @@ boolean checkForNewColorMeasurement() {
     return false;
 }
 
-
 void readColors() {
     static char buffer[80]; // Adjust the size based on the expected length
-    static bool printEnabled = true;  // Variable to control the printing
+    static bool printEnabled = true; // Variable to control the printing
     static char color = ' ';
 
     // Check if any serial data is available to read
@@ -156,6 +167,68 @@ void readColors() {
 
 // ------------------------------------------------------------------------
 
+void step1GetObject() {
+    servoSeparator.write(0);
+    delay(1000);
+}
+
+RGBI step2DetermineRGBI() {
+    constexpr int ROUNDS = 5;
+
+    RGBI rgbiTotal{};
+
+    for (int i = 0; i < ROUNDS; ++i) {
+        RGBI rgbi{};
+        fillRGBIArray();
+        for (int sensorIndex = 0; sensorIndex < COLOR_SENSORS; ++sensorIndex) {
+            rgbi.red += rgbArray[sensorIndex].red;
+            rgbi.green += rgbArray[sensorIndex].green;
+            rgbi.blue += rgbArray[sensorIndex].blue;
+            rgbi.intensity += rgbArray[sensorIndex].intensity;
+        }
+        rgbi.red = rgbi.red / COLOR_SENSORS;
+        rgbi.green = rgbi.green / COLOR_SENSORS;
+        rgbi.blue = rgbi.blue / COLOR_SENSORS;
+        rgbi.intensity = rgbi.intensity / COLOR_SENSORS;
+
+        rgbiTotal.red += rgbi.red;
+        rgbiTotal.green += rgbi.green;
+        rgbiTotal.blue += rgbi.blue;
+        rgbiTotal.intensity += rgbi.intensity;
+    }
+
+    rgbiTotal.red = rgbiTotal.red / ROUNDS;
+    rgbiTotal.green = rgbiTotal.green / ROUNDS;
+    rgbiTotal.blue = rgbiTotal.blue / ROUNDS;
+    rgbiTotal.intensity = rgbiTotal.intensity / ROUNDS;
+
+    return rgbiTotal;
+}
+
+int step3CalculacteLeverPos(RGBI rgbi) {
+    int pos = 90;
+
+    return pos;
+}
+
+void step4PositionLever(int pos) {
+    servoLever.write(pos);
+}
+
+void step5WaitForFinish() {
+    delay(2000);
+}
+
+void process() {
+    step1GetObject();
+    RGBI rgbi = step2DetermineRGBI();
+    int pos = step3CalculacteLeverPos(rgbi);
+    step4PositionLever(pos);
+    step5WaitForFinish();
+}
+
+// ------------------------------------------------------------------------
+
 // Called on startup
 void setup() {
     // Use contemporary baudrate
@@ -171,14 +244,19 @@ void setup() {
     pinMode(COLOR_S3, OUTPUT);
     pinMode(COLOR_OUT_1, INPUT);
     pinMode(COLOR_OUT_2, INPUT);
+
+    // Servo
+    servoSeparator.attach(SERVO_SEPERATOR_PIN);
+    servoLever.attach(SERVO_LEVER_PIN);
 }
 
 // Called regularly
 void loop() {
-
     blink();
     loopCount++;
 
-    readColors();
-}
+    //readColors();
+    //servoLoop();
 
+    process();
+}
