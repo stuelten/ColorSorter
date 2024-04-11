@@ -1,0 +1,20 @@
+@startuml
+
+[*] --> SortState
+
+state SortState {
+    [*] --> Wait: Initialized
+    Wait --> ColorDetection: ColorNewSensorValue
+    ColorDetection --> ColorSort: ColorDetected
+    ColorSort --> ChuteMove
+    ColorDetection --> ColorDump: ColorNotDetected
+    ColorDump --> ChuteMove
+    ChuteMove --> Wait: ChuteMoved
+}
+
+SortState --> ErrorState: Error
+
+state ErrorState {
+}
+
+@enduml
